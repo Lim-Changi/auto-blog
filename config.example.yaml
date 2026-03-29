@@ -1,0 +1,49 @@
+# ============================================
+# Auto Blog Generator Configuration
+# ============================================
+# Setup:
+#   1. Copy this file to config.yaml: cp config.example.yaml config.yaml
+#   2. Fill in your blog_id
+#   3. Run: python setup_auth.py
+#   4. Cron setup:
+#      crontab -e
+#      0 10 * * * cd /path/to/auto-blog && /path/to/python orchestrator.py >> logs/cron.log 2>&1
+# ============================================
+
+blogger:
+  blog_id: "YOUR_BLOG_ID"
+  credentials_path: "credentials/google_oauth.json"
+  token_path: "credentials/token.json"
+
+schedule:
+  posts_per_week: [3, 4]
+  time_range_hours: [6, 22]
+  random_delay_max_hours: 2
+
+content:
+  language: "en"
+  min_word_count: 800
+  target_audience: "non-tech adults"
+  tone: "friendly, practical, data-driven"
+  categories:
+    - cooking
+    - travel
+    - health
+    - finance
+    - parenting
+    - shopping
+    - productivity
+    - education
+    - fitness
+    - home
+    - career
+    - hobbies
+
+trends:
+  region: "US"
+  lookback_days: 7
+  max_keywords_per_run: 3
+
+claude:
+  timeout_seconds: 120
+  max_retries: 1

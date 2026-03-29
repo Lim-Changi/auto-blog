@@ -1,0 +1,8 @@
+config.yaml
+credentials/
+output/
+logs/
+__pycache__/
+*.pyc
+.pytest_cache/
+venv/
