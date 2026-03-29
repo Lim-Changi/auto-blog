@@ -3,7 +3,7 @@ import os
 import time
 import random
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime
 
 from pytrends.request import TrendReq
 
@@ -18,15 +18,16 @@ class TrendResearcher:
         self.trends_config = config["trends"]
         self.categories = config["content"]["categories"]
 
-    def build_queries(self) -> list[str]:
-        return [f"AI {cat}" for cat in self.categories]
+    def build_queries(self) -> list[dict]:
+        return [{"query": f"AI {cat}", "category": cat} for cat in self.categories]
 
-    def fetch_trends(self, queries: list[str]) -> list[dict]:
+    def fetch_trends(self, queries: list[dict]) -> list[dict]:
         pytrends = TrendReq(hl="en-US", tz=360)
         results = []
 
-        for query in queries:
-            time.sleep(random.uniform(2, 5))
+        for item in queries:
+            query = item["query"]
+            category = item["category"]
             try:
                 pytrends.build_payload(
                     [query],
@@ -35,6 +36,7 @@ class TrendResearcher:
                 )
                 interest_df = pytrends.interest_over_time()
                 if interest_df.empty:
+                    time.sleep(random.uniform(2, 5))
                     continue
 
                 interest = int(interest_df[query].mean())
@@ -46,19 +48,24 @@ class TrendResearcher:
 
                 results.append({
                     "keyword": query,
+                    "category": category,
                     "interest": interest,
                     "result_count": len(related_queries) * 100 + 1,
                     "related_queries": related_queries,
                 })
             except Exception as e:
                 logger.warning(f"Failed to fetch trends for '{query}': {e}")
-                continue
+
+            time.sleep(random.uniform(2, 5))
 
         return results
 
     def score_keywords(self, raw_data: list[dict]) -> list[dict]:
-        with open(self.posted_keywords_path) as f:
-            posted = json.load(f)
+        if not os.path.exists(self.posted_keywords_path):
+            posted = []
+        else:
+            with open(self.posted_keywords_path) as f:
+                posted = json.load(f)
 
         scored = []
         for item in raw_data:
@@ -72,12 +79,23 @@ class TrendResearcher:
         scored.sort(key=lambda x: x["score"], reverse=True)
         return scored
 
-    def select_template(self, keyword: str) -> str:
+    def select_template(self, keyword: str, related_queries: list[str] | None = None) -> str:
         kw = keyword.lower()
         if kw.startswith("how to") or "how to" in kw:
             return "howto_apply"
         if kw.startswith("best") or "best" in kw or "top" in kw:
             return "best_tools"
+
+        if related_queries:
+            for rq in related_queries:
+                rq_lower = rq.lower()
+                if "how to" in rq_lower:
+                    return "howto_apply"
+            for rq in related_queries:
+                rq_lower = rq.lower()
+                if "best" in rq_lower or "top" in rq_lower:
+                    return "best_tools"
+
         return "daily_ai_tips"
 
     def run(self) -> str:
@@ -90,7 +108,7 @@ class TrendResearcher:
         top_keywords = scored[:max_kw]
 
         for kw in top_keywords:
-            kw["template"] = self.select_template(kw["keyword"])
+            kw["template"] = self.select_template(kw["keyword"], kw.get("related_queries"))
             title_keyword = kw["keyword"].replace("AI ", "")
             if kw["template"] == "howto_apply":
                 kw["title_suggestion"] = f"How to Use AI for {title_keyword.title()} — A Simple Guide for Beginners"
