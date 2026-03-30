@@ -1,3 +1,4 @@
+import argparse
 import json
 import os
 import random
@@ -117,18 +118,21 @@ class Orchestrator:
         logger.info(f"Published: {result.get('url', 'unknown')}")
         return True
 
-    def run(self):
+    def run(self, force: bool = False):
         logger.info("=== Auto Blog Orchestrator Started ===")
 
-        delay_max = self.schedule.get("random_delay_max_hours", 0)
-        if delay_max > 0:
-            delay_seconds = random.uniform(0, delay_max * 3600)
-            logger.info(f"Random delay: {delay_seconds / 60:.1f} minutes")
-            time.sleep(delay_seconds)
+        if not force:
+            delay_max = self.schedule.get("random_delay_max_hours", 0)
+            if delay_max > 0:
+                delay_seconds = random.uniform(0, delay_max * 3600)
+                logger.info(f"Random delay: {delay_seconds / 60:.1f} minutes")
+                time.sleep(delay_seconds)
 
-        if not self.should_post_today():
-            logger.info("Decided not to post today. Exiting.")
-            return
+            if not self.should_post_today():
+                logger.info("Decided not to post today. Exiting.")
+                return
+        else:
+            logger.info("Force mode: skipping schedule check and delay")
 
         try:
             self.run_pipeline()
@@ -152,11 +156,15 @@ def main():
         ],
     )
 
+    parser = argparse.ArgumentParser(description="Auto Blog Generator")
+    parser.add_argument("--now", action="store_true", help="Run immediately, skip schedule check and delay")
+    args = parser.parse_args()
+
     with open("config.yaml") as f:
         config = yaml.safe_load(f)
 
     orch = Orchestrator(config=config, base_dir=".")
-    orch.run()
+    orch.run(force=args.now)
 
 
 if __name__ == "__main__":
