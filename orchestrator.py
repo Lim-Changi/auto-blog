@@ -83,14 +83,11 @@ class Orchestrator:
         template = keyword_data.get("template", "")
         related = keyword_data.get("related_queries", [])
 
-        # Base labels
         labels = ["AI", "artificial intelligence"]
 
-        # Category label
         if category:
             labels.append(category)
 
-        # Template-based labels
         template_labels = {
             "howto_apply": "how to",
             "best_tools": "best tools",
@@ -99,18 +96,13 @@ class Orchestrator:
         if template in template_labels:
             labels.append(template_labels[template])
 
-        # Keyword as label (e.g. "AI home" → "AI home")
-        labels.append(keyword_data["keyword"])
-
-        # Compound label (e.g. "AI home tips")
-        labels.append(f"AI {category} tips")
-
-        # Top related queries as labels (max 3)
+        # Short related queries as labels (skip anything over 40 chars)
         for rq in related[:3]:
-            labels.append(rq)
+            if len(rq) <= 40:
+                labels.append(rq)
 
-        # Deduplicate, filter empty
-        labels = list(dict.fromkeys(l.strip() for l in labels if l.strip()))
+        # Deduplicate, filter empty, cap at 10 labels
+        labels = list(dict.fromkeys(l.strip() for l in labels if l.strip()))[:10]
         result = uploader.upload(draft_path, keyword_data, labels)
 
         logger.info(f"Published: {result.get('url', 'unknown')}")

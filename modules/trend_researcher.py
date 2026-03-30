@@ -159,15 +159,26 @@ class TrendResearcher:
         """Add title_suggestion based on template."""
         for kw in keywords:
             keyword = kw["keyword"]
-            # Clean keyword for title (remove leading "AI" if present)
-            title_keyword = re.sub(r"^AI\s+", "", keyword, flags=re.IGNORECASE)
 
-            if kw["template"] == "howto_apply":
-                kw["title_suggestion"] = f"How to Use AI for {title_keyword.title()} — A Simple Guide for Beginners"
+            # If keyword is already a full phrase (e.g. "how to use AI for meal planning"),
+            # use it directly as the title instead of wrapping in a template
+            kw_lower = keyword.lower()
+            is_full_phrase = any(kw_lower.startswith(p) for p in [
+                "how to", "best ", "top ", "why ", "what ",
+            ])
+
+            if is_full_phrase:
+                # Capitalize as a title, add suffix
+                kw["title_suggestion"] = keyword.title() + " — A Simple Guide"
+            elif kw["template"] == "howto_apply":
+                clean = re.sub(r"^AI\s+", "", keyword, flags=re.IGNORECASE)
+                kw["title_suggestion"] = f"How to Use AI for {clean.title()} — A Beginner's Guide"
             elif kw["template"] == "best_tools":
-                kw["title_suggestion"] = f"Best Free AI Tools for {title_keyword.title()} in {datetime.now().year}"
+                clean = re.sub(r"^AI\s+", "", keyword, flags=re.IGNORECASE)
+                kw["title_suggestion"] = f"Best Free AI Tools for {clean.title()} in {datetime.now().year}"
             else:
-                kw["title_suggestion"] = f"5 Easy Ways AI Can Help You With {title_keyword.title()}"
+                clean = re.sub(r"^AI\s+", "", keyword, flags=re.IGNORECASE)
+                kw["title_suggestion"] = f"5 Easy Ways AI Can Help You With {clean.title()}"
         return keywords
 
     def _load_cached_keywords(self) -> list[dict]:
