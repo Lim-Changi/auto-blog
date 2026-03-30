@@ -98,6 +98,34 @@ class TrendResearcher:
 
         return "daily_ai_tips"
 
+    def _load_cached_keywords(self) -> list[dict]:
+        """Load keywords from previous runs as fallback."""
+        if not os.path.exists(self.output_dir):
+            return []
+
+        cached = []
+        for f in sorted(os.listdir(self.output_dir), reverse=True):
+            if f.endswith(".json"):
+                try:
+                    with open(os.path.join(self.output_dir, f)) as fh:
+                        cached.extend(json.load(fh))
+                except (json.JSONDecodeError, IOError):
+                    continue
+        return cached
+
+    def _enrich_keywords(self, keywords: list[dict]) -> list[dict]:
+        """Add template and title_suggestion to keywords."""
+        for kw in keywords:
+            kw["template"] = self.select_template(kw["keyword"], kw.get("related_queries"))
+            title_keyword = kw["keyword"].replace("AI ", "")
+            if kw["template"] == "howto_apply":
+                kw["title_suggestion"] = f"How to Use AI for {title_keyword.title()} — A Simple Guide for Beginners"
+            elif kw["template"] == "best_tools":
+                kw["title_suggestion"] = f"Best Free AI Tools for {title_keyword.title()} in 2026"
+            else:
+                kw["title_suggestion"] = f"5 Easy Ways AI Can Help You With {title_keyword.title()}"
+        return keywords
+
     def run(self) -> str:
         os.makedirs(self.output_dir, exist_ok=True)
         queries = self.build_queries()
@@ -107,15 +135,17 @@ class TrendResearcher:
         max_kw = self.trends_config["max_keywords_per_run"]
         top_keywords = scored[:max_kw]
 
-        for kw in top_keywords:
-            kw["template"] = self.select_template(kw["keyword"], kw.get("related_queries"))
-            title_keyword = kw["keyword"].replace("AI ", "")
-            if kw["template"] == "howto_apply":
-                kw["title_suggestion"] = f"How to Use AI for {title_keyword.title()} — A Simple Guide for Beginners"
-            elif kw["template"] == "best_tools":
-                kw["title_suggestion"] = f"Best Free AI Tools for {title_keyword.title()} in 2026"
-            else:
-                kw["title_suggestion"] = f"5 Easy Ways AI Can Help You With {title_keyword.title()}"
+        # Fallback to cached keywords if trends API failed (e.g. 429)
+        if not top_keywords:
+            logger.warning("No fresh keywords from Trends API. Falling back to cached keywords.")
+            cached = self._load_cached_keywords()
+            scored_cached = self.score_keywords(cached)
+            top_keywords = scored_cached[:max_kw]
+
+            if not top_keywords:
+                logger.warning("No cached keywords available either.")
+
+        top_keywords = self._enrich_keywords(top_keywords)
 
         date_str = datetime.now().strftime("%Y-%m-%d")
         output_path = os.path.join(self.output_dir, f"{date_str}.json")

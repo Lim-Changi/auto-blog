@@ -14,7 +14,7 @@ def orch(tmp_path):
             "token_path": str(tmp_path / "token.json"),
         },
         "schedule": {
-            "posts_per_week": [3, 4],
+            "posts_per_day": 1,
             "time_range_hours": [6, 22],
             "random_delay_max_hours": 0,
         },
@@ -39,25 +39,30 @@ def orch(tmp_path):
 
 
 class TestShouldPostToday:
-    def test_returns_bool(self, orch):
-        result = orch.should_post_today()
-        assert isinstance(result, bool)
-
-    @patch("orchestrator.Orchestrator.posts_this_week", return_value=4)
-    def test_no_post_when_max_reached(self, mock_posts, orch):
-        assert orch.should_post_today() is False
-
-    @patch("orchestrator.Orchestrator.posts_this_week", return_value=0)
-    @patch("orchestrator.random.random", return_value=0.1)
-    def test_posts_when_probability_met(self, mock_rand, mock_posts, orch):
+    def test_returns_true_when_no_posts_today(self, orch, tmp_path):
+        os.makedirs(tmp_path / "logs", exist_ok=True)
         assert orch.should_post_today() is True
 
-
-class TestPostsThisWeek:
-    def test_counts_from_posted_log(self, orch, tmp_path):
+    def test_returns_false_when_already_posted(self, orch, tmp_path):
         log_dir = tmp_path / "logs"
-        log_dir.mkdir()
-        assert orch.posts_this_week() == 0
+        log_dir.mkdir(exist_ok=True)
+        from datetime import datetime
+        log_file = log_dir / f"{datetime.now().strftime('%Y-%m-%d')}.log"
+        log_file.write_text("Published: https://blog.com/post")
+        assert orch.should_post_today() is False
+
+
+class TestPostsToday:
+    def test_zero_when_no_log(self, orch):
+        assert orch.posts_today() == 0
+
+    def test_counts_published_entries(self, orch, tmp_path):
+        log_dir = tmp_path / "logs"
+        log_dir.mkdir(exist_ok=True)
+        from datetime import datetime
+        log_file = log_dir / f"{datetime.now().strftime('%Y-%m-%d')}.log"
+        log_file.write_text("Published: url1\nPublished: url2")
+        assert orch.posts_today() == 2
 
 
 class TestRunPipeline:

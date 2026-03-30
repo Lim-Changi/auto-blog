@@ -21,57 +21,25 @@ class Orchestrator:
         self.base_dir = base_dir
         self.schedule = config["schedule"]
 
-    def posts_this_week(self) -> int:
-        log_dir = os.path.join(self.base_dir, "logs")
-        if not os.path.exists(log_dir):
-            return 0
-
-        today = datetime.now()
-        weekday = today.weekday()
-        count = 0
-
-        for f in os.listdir(log_dir):
-            if f.endswith(".log"):
-                try:
-                    log_date = datetime.strptime(f.replace(".log", ""), "%Y-%m-%d")
-                    days_diff = (today - log_date).days
-                    if days_diff <= weekday:
-                        log_path = os.path.join(log_dir, f)
-                        with open(log_path) as lf:
-                            if "Published:" in lf.read():
-                                count += 1
-                except ValueError:
-                    continue
-        return count
-
     def should_post_today(self) -> bool:
-        current_count = self.posts_this_week()
-        max_posts = self.schedule["posts_per_week"][1]
+        posts_per_day = self.schedule.get("posts_per_day", 1)
+        current_count = self.posts_today()
 
-        if current_count >= max_posts:
-            logger.info(f"Already posted {current_count} times this week (max {max_posts}). Skipping.")
+        if current_count >= posts_per_day:
+            logger.info(f"Already posted {current_count} today (max {posts_per_day}). Skipping.")
             return False
 
-        today = datetime.now()
-        weekday = today.weekday()
-        remaining_days = 7 - weekday
-        min_posts = self.schedule["posts_per_week"][0]
-        needed = max(0, min_posts - current_count)
+        logger.info(f"Posts today: {current_count}/{posts_per_day}. Proceeding.")
+        return True
 
-        if remaining_days <= 0:
-            return False
-
-        probability = max(needed / remaining_days, 0.5)
-        probability = min(probability, 1.0)
-
-        roll = random.random()
-        should_post = roll < probability
-        logger.info(
-            f"Post decision: count={current_count}, needed={needed}, "
-            f"remaining_days={remaining_days}, prob={probability:.2f}, "
-            f"roll={roll:.2f}, post={should_post}"
+    def posts_today(self) -> int:
+        log_path = os.path.join(
+            self.base_dir, "logs", f"{datetime.now().strftime('%Y-%m-%d')}.log"
         )
-        return should_post
+        if not os.path.exists(log_path):
+            return 0
+        with open(log_path) as f:
+            return f.read().count("Published:")
 
     def run_pipeline(self) -> bool:
         date_str = datetime.now().strftime("%Y-%m-%d")
