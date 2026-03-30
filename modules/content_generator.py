@@ -50,7 +50,8 @@ class ContentGenerator:
     def call_claude(self, prompt: str) -> str:
         timeout = self.claude_config["timeout_seconds"]
         result = subprocess.run(
-            ["claude", "-p", prompt, "--output-format", "text", "--max-turns", "1"],
+            ["claude", "-p", "-", "--output-format", "text", "--max-turns", "1"],
+            input=prompt,
             capture_output=True,
             text=True,
             timeout=timeout,
