@@ -20,8 +20,18 @@ class BloggerUploader:
         self.blogger_config = config["blogger"]
         self.posted_keywords_path = posted_keywords_path
 
+    CONTENT_STYLE = """<style>
+.post-body p { margin-bottom: 1.4em; line-height: 1.8; }
+.post-body h2 { margin-top: 2em; margin-bottom: 0.8em; }
+.post-body h3 { margin-top: 1.5em; margin-bottom: 0.6em; }
+.post-body ul, .post-body ol { margin-bottom: 1.4em; }
+.post-body li { margin-bottom: 0.5em; line-height: 1.7; }
+</style>
+"""
+
     def markdown_to_html(self, md_text: str) -> str:
-        return markdown.markdown(md_text, extensions=["extra", "codehilite"])
+        html = markdown.markdown(md_text, extensions=["extra", "codehilite"])
+        return self.CONTENT_STYLE + html
 
     def extract_meta(self, draft: str) -> dict:
         lines = draft.strip().split("\n")
