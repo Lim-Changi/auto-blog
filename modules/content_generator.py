@@ -29,6 +29,39 @@ class ContentGenerator:
 
         return prompt
 
+    def clean_draft(self, raw: str) -> str:
+        """Extract only the blog article from Claude's output.
+
+        Claude sometimes prepends/appends conversational text like
+        'Here is the article:' or 'I hope this helps!'. This method
+        extracts content starting from the META: line or first heading.
+        """
+        lines = raw.split("\n")
+
+        # Find start: META: line or first heading
+        start = 0
+        for i, line in enumerate(lines):
+            if line.strip().startswith("META:") or re.match(r"^#{1,2}\s+", line):
+                start = i
+                break
+
+        # Find end: trim trailing non-content lines
+        end = len(lines)
+        for i in range(len(lines) - 1, start, -1):
+            stripped = lines[i].strip()
+            if stripped == "" or stripped == "---":
+                end = i
+                continue
+            # Stop trimming if we hit actual content
+            if re.match(r"^#{1,3}\s+", stripped) or len(stripped) > 20:
+                end = i + 1
+                break
+
+        cleaned = "\n".join(lines[start:end]).strip()
+        if cleaned != raw.strip():
+            logger.info("Cleaned non-article content from Claude output")
+        return cleaned
+
     def validate_draft(self, draft: str) -> bool:
         word_count = len(draft.split())
         if word_count < self.min_word_count:
@@ -71,7 +104,8 @@ class ContentGenerator:
         max_attempts = 1 + self.claude_config["max_retries"]
         for attempt in range(max_attempts):
             try:
-                draft = self.call_claude(prompt)
+                raw = self.call_claude(prompt)
+                draft = self.clean_draft(raw)
             except Exception as e:
                 logger.error(f"Claude CLI error (attempt {attempt + 1}): {e}")
                 continue
