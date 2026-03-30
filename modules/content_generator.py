@@ -49,13 +49,17 @@ class ContentGenerator:
 
     def call_claude(self, prompt: str) -> str:
         timeout = self.claude_config["timeout_seconds"]
+        logger.debug(f"Prompt length: {len(prompt)} chars")
         result = subprocess.run(
-            ["claude", "-p", "-", "--output-format", "text", "--max-turns", "1"],
+            ["claude", "-p", "-", "--output-format", "text"],
             input=prompt,
             capture_output=True,
             text=True,
             timeout=timeout,
         )
+        logger.debug(f"Claude stdout ({len(result.stdout)} chars): {result.stdout[:200]!r}")
+        logger.debug(f"Claude stderr: {result.stderr[:500]!r}")
+        logger.debug(f"Claude returncode: {result.returncode}")
         if result.returncode != 0:
             raise RuntimeError(f"Claude CLI failed: {result.stderr}")
         return result.stdout.strip()
