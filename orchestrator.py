@@ -111,8 +111,38 @@ class Orchestrator:
             config=self.config,
             posted_keywords_path=os.path.join(self.base_dir, "data", "posted_keywords.json"),
         )
-        labels = ["AI", keyword_data.get("category", "")] + keyword_data["keyword"].split()
-        labels = list(set(labels))
+        category = keyword_data.get("category", "")
+        template = keyword_data.get("template", "")
+        related = keyword_data.get("related_queries", [])
+
+        # Base labels
+        labels = ["AI", "artificial intelligence"]
+
+        # Category label
+        if category:
+            labels.append(category)
+
+        # Template-based labels
+        template_labels = {
+            "howto_apply": "how to",
+            "best_tools": "best tools",
+            "daily_ai_tips": "tips",
+        }
+        if template in template_labels:
+            labels.append(template_labels[template])
+
+        # Keyword as label (e.g. "AI home" → "AI home")
+        labels.append(keyword_data["keyword"])
+
+        # Compound label (e.g. "AI home tips")
+        labels.append(f"AI {category} tips")
+
+        # Top related queries as labels (max 3)
+        for rq in related[:3]:
+            labels.append(rq)
+
+        # Deduplicate, filter empty
+        labels = list(dict.fromkeys(l.strip() for l in labels if l.strip()))
         result = uploader.upload(draft_path, keyword_data, labels)
 
         logger.info(f"Published: {result.get('url', 'unknown')}")
