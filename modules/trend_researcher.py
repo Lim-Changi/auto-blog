@@ -72,7 +72,11 @@ class TrendResearcher:
 
     def _call_claude(self, prompt: str) -> str:
         result = subprocess.run(
-            ["claude", "-p", "-", "--output-format", "text"],
+            [
+                "claude", "-p", "-",
+                "--output-format", "text",
+                "--allowedTools", "WebSearch,WebFetch",
+            ],
             input=prompt,
             capture_output=True,
             text=True,
