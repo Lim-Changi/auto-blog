@@ -49,6 +49,9 @@ class BloggerUploader:
         title_match = re.search(r"^#\s+(.+)", clean_content, re.MULTILINE)
         title = title_match.group(1).strip() if title_match else "Untitled"
 
+        # Remove H1 title from content body (Blogger already shows it as post title)
+        clean_content = re.sub(r"^#\s+.+\n*", "", clean_content, count=1).strip()
+
         return {
             "title": title,
             "description": description,
