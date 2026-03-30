@@ -5,8 +5,6 @@ import os
 import pytest
 from unittest.mock import patch, MagicMock
 
-import pandas as pd
-
 from orchestrator import Orchestrator
 
 
@@ -19,7 +17,7 @@ def full_setup(tmp_path):
             "token_path": str(tmp_path / "token.json"),
         },
         "schedule": {
-            "posts_per_week": [3, 4],
+            "posts_per_day": 1,
             "time_range_hours": [6, 22],
             "random_delay_max_hours": 0,
         },
@@ -61,31 +59,31 @@ def full_setup(tmp_path):
 
 
 @patch("modules.blogger_uploader.BloggerUploader.get_service")
+@patch("modules.trend_researcher.TrendResearcher._call_claude")
 @patch("modules.content_generator.subprocess.run")
-@patch("modules.trend_researcher.TrendReq")
-def test_full_pipeline_end_to_end(mock_trendreq_cls, mock_subprocess, mock_get_service, full_setup):
+def test_full_pipeline_end_to_end(mock_content_subprocess, mock_research_claude, mock_get_service, full_setup):
     config, tmp_path = full_setup
 
-    # Mock pytrends
-    mock_pytrends = MagicMock()
-    mock_trendreq_cls.return_value = mock_pytrends
-    mock_pytrends.interest_over_time.return_value = pd.DataFrame(
-        {"AI cooking": [50, 60, 80]}
-    )
-    mock_pytrends.related_queries.return_value = {
-        "AI cooking": {
-            "top": pd.DataFrame({"query": ["ChatGPT recipes", "AI meal planner"]}),
-        }
-    }
+    # Mock Claude CLI for trend research
+    mock_research_claude.return_value = json.dumps([{
+        "keyword": "AI meal planning",
+        "category": "cooking",
+        "interest": 82,
+        "search_demand": "high",
+        "competition": "low",
+        "related_queries": ["ChatGPT meal prep", "AI diet planner"],
+        "content_angle": "howto",
+        "reasoning": "trending topic",
+    }])
 
-    # Mock Claude CLI
+    # Mock Claude CLI for content generation
     fake_article = (
-        "# How to Use AI for Cooking\n\n"
+        "# How to Use AI for Meal Planning\n\n"
         "## Introduction\n\n" + "word " * 60 + "\n\n"
         "## Step by Step\n\nMore content here.\n\n"
         "## Conclusion\n\nFinal thoughts."
     )
-    mock_subprocess.return_value = MagicMock(returncode=0, stdout=fake_article)
+    mock_content_subprocess.return_value = MagicMock(returncode=0, stdout=fake_article)
 
     # Mock Blogger API
     mock_service = MagicMock()
@@ -113,7 +111,7 @@ def test_full_pipeline_end_to_end(mock_trendreq_cls, mock_subprocess, mock_get_s
     # Verify keyword was recorded as posted
     with open(tmp_path / "data" / "posted_keywords.json") as f:
         posted = json.load(f)
-    assert "AI cooking" in posted
+    assert "AI meal planning" in posted
 
     # Verify Blogger API was called
     mock_posts.insert.assert_called_once()
