@@ -11,6 +11,7 @@ import yaml
 from modules.trend_researcher import TrendResearcher
 from modules.content_generator import ContentGenerator
 from modules.blogger_uploader import BloggerUploader
+from modules.content_validator import ContentValidator
 
 logger = logging.getLogger(__name__)
 
@@ -59,54 +60,68 @@ class Orchestrator:
             logger.warning("No keywords found. Skipping.")
             return False
 
-        keyword_data = keywords[0]
-        logger.info(f"Selected keyword: {keyword_data['keyword']}")
-
-        logger.info("=== Step 2: Content Generation ===")
         generator = ContentGenerator(
             config=self.config,
             prompts_dir=os.path.join(self.base_dir, "prompts"),
             output_dir=os.path.join(self.base_dir, "output", "drafts"),
         )
-        draft_path = generator.generate(keyword_data, date_str)
 
-        if draft_path is None:
-            logger.error("Content generation failed. Skipping upload.")
-            return False
-
-        logger.info("=== Step 3: Blogger Upload ===")
-        uploader = BloggerUploader(
+        validator = ContentValidator(
             config=self.config,
-            posted_keywords_path=os.path.join(self.base_dir, "data", "posted_keywords.json"),
+            prompts_dir=os.path.join(self.base_dir, "prompts"),
         )
-        category = keyword_data.get("category", "")
-        template = keyword_data.get("template", "")
-        related = keyword_data.get("related_queries", [])
 
-        labels = ["AI", "artificial intelligence"]
+        for i, keyword_data in enumerate(keywords):
+            logger.info(f"=== Trying keyword {i + 1}/{len(keywords)}: {keyword_data['keyword']} ===")
 
-        if category:
-            labels.append(category)
+            logger.info("=== Step 2: Content Generation ===")
+            draft_path = generator.generate(keyword_data, date_str)
 
-        template_labels = {
-            "howto_apply": "how to",
-            "best_tools": "best tools",
-            "daily_ai_tips": "tips",
-        }
-        if template in template_labels:
-            labels.append(template_labels[template])
+            if draft_path is None:
+                logger.warning(f"Content generation failed for '{keyword_data['keyword']}'. Trying next.")
+                continue
 
-        # Short related queries as labels (skip anything over 40 chars)
-        for rq in related[:3]:
-            if len(rq) <= 40:
-                labels.append(rq)
+            logger.info("=== Step 2.5: Content Validation ===")
+            validated_path = validator.validate_and_fix(draft_path)
 
-        # Deduplicate, filter empty, cap at 10 labels
-        labels = list(dict.fromkeys(l.strip() for l in labels if l.strip()))[:10]
-        result = uploader.upload(draft_path, keyword_data, labels)
+            if validated_path is None:
+                logger.warning(f"Validation failed for '{keyword_data['keyword']}'. Trying next.")
+                continue
 
-        logger.info(f"Published: {result.get('url', 'unknown')}")
-        return True
+            logger.info("=== Step 3: Blogger Upload ===")
+            uploader = BloggerUploader(
+                config=self.config,
+                posted_keywords_path=os.path.join(self.base_dir, "data", "posted_keywords.json"),
+            )
+            category = keyword_data.get("category", "")
+            template = keyword_data.get("template", "")
+            related = keyword_data.get("related_queries", [])
+
+            labels = ["AI", "artificial intelligence"]
+
+            if category:
+                labels.append(category)
+
+            template_labels = {
+                "howto_apply": "how to",
+                "best_tools": "best tools",
+                "daily_ai_tips": "tips",
+            }
+            if template in template_labels:
+                labels.append(template_labels[template])
+
+            for rq in related[:3]:
+                if len(rq) <= 40:
+                    labels.append(rq)
+
+            labels = list(dict.fromkeys(l.strip() for l in labels if l.strip()))[:10]
+            result = uploader.upload(validated_path, keyword_data, labels)
+
+            logger.info(f"Published: {result.get('url', 'unknown')}")
+            return True
+
+        logger.error("All keywords exhausted. Pipeline failed.")
+        return False
 
     def run(self, force: bool = False):
         logger.info("=== Auto Blog Orchestrator Started ===")
