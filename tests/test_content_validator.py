@@ -44,6 +44,19 @@ class TestCheckAiPatterns:
         issues = validator._check_ai_patterns(text)
         assert not any("uniform" in i.lower() for i in issues)
 
+    def test_allows_varied_paragraphs_above_threshold(self, validator):
+        # 4+ paragraphs with genuinely varied lengths (CV > 0.2)
+        text = (
+            "Short thought here.\n\n"
+            "This one is a bit longer with more words to fill it out nicely.\n\n"
+            "Here is a much longer paragraph that really goes into detail about the topic at hand "
+            "and provides a lot of extra context and information to make sure the word count "
+            "is significantly different from the short paragraph above.\n\n"
+            "Medium length works too."
+        )
+        issues = validator._check_ai_patterns(text)
+        assert not any("uniform" in i.lower() for i in issues)
+
     def test_detects_repetitive_openers(self, validator):
         text = (
             "This is the first sentence. This is the second. "
