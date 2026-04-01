@@ -45,5 +45,10 @@ trends:
   max_keywords_per_run: 3
 
 claude:
+  path: "claude"  # Full path for cron: e.g. /Users/you/.local/bin/claude
   timeout_seconds: 120
   max_retries: 1
+
+validator:
+  max_fix_attempts: 2       # validate-fix cycles before giving up on a draft
+  enabled: true             # set to false to skip validation (e.g. for testing)

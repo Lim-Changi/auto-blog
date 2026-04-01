@@ -1,5 +1,6 @@
 import json
 import os
+import random
 import subprocess
 import logging
 import re
@@ -50,7 +51,9 @@ class TrendResearcher:
         self.posted_keywords_path = posted_keywords_path
         self.trends_config = config["trends"]
         self.categories = config["content"]["categories"]
-        self.claude_timeout = config.get("claude", {}).get("timeout_seconds", 300)
+        claude_config = config.get("claude", {})
+        self.claude_path = claude_config.get("path", "claude")
+        self.claude_timeout = claude_config.get("timeout_seconds", 300)
 
     def _get_posted_keywords(self) -> list[str]:
         if not os.path.exists(self.posted_keywords_path):
@@ -73,7 +76,7 @@ class TrendResearcher:
     def _call_claude(self, prompt: str) -> str:
         result = subprocess.run(
             [
-                "claude", "-p", "-",
+                self.claude_path, "-p", "-",
                 "--output-format", "text",
                 "--allowedTools", "WebSearch,WebFetch",
             ],
@@ -155,30 +158,67 @@ class TrendResearcher:
         normalized.sort(key=lambda x: x["score"], reverse=True)
         return normalized
 
+    # Title pattern pools per template type — randomly selected for variety
+    _FULL_PHRASE_SUFFIXES = [
+        " — A Simple Guide",
+        " — What You Need to Know",
+        " (And Why It Matters)",
+        " — The Complete Breakdown",
+        " — Explained in Plain English",
+        " — Here's What Actually Works",
+    ]
+
+    _HOWTO_PATTERNS = [
+        "How to Use AI for {kw} — A Beginner's Guide",
+        "A Step-by-Step Guide to {kw} With AI",
+        "{kw} With AI: A Practical How-To",
+        "The Simple Way to Use AI for {kw}",
+        "Getting Started With AI for {kw}",
+        "{kw} Made Easy With AI — Here's How",
+    ]
+
+    _BEST_TOOLS_PATTERNS = [
+        "Best Free AI Tools for {kw} in {year}",
+        "{year}'s Top Free AI Tools for {kw}",
+        "{kw}: The Best Free AI Tools Worth Trying",
+        "Free AI Tools That Actually Help With {kw}",
+        "The {year} Guide to Free AI Tools for {kw}",
+        "{kw} — Free AI Tools You Should Know About",
+    ]
+
+    _DAILY_TIPS_PATTERNS = [
+        "5 Easy Ways AI Can Help You With {kw}",
+        "{kw}: Simple AI Tips Anyone Can Try",
+        "How AI Makes {kw} Easier Than You Think",
+        "AI for {kw} — Practical Tips That Actually Work",
+        "Everyday AI: Smarter {kw} Without the Hassle",
+        "{kw} Got Easier — Thanks to These AI Tricks",
+    ]
+
     def _enrich_keywords(self, keywords: list[dict]) -> list[dict]:
-        """Add title_suggestion based on template."""
+        """Add title_suggestion based on template with varied patterns."""
+        year = datetime.now().year
         for kw in keywords:
             keyword = kw["keyword"]
+            clean = re.sub(r"^AI\s+", "", keyword, flags=re.IGNORECASE).title()
 
-            # If keyword is already a full phrase (e.g. "how to use AI for meal planning"),
-            # use it directly as the title instead of wrapping in a template
             kw_lower = keyword.lower()
             is_full_phrase = any(kw_lower.startswith(p) for p in [
                 "how to", "best ", "top ", "why ", "what ",
             ])
 
             if is_full_phrase:
-                # Capitalize as a title, add suffix
-                kw["title_suggestion"] = keyword.title() + " — A Simple Guide"
+                suffix = random.choice(self._FULL_PHRASE_SUFFIXES)
+                kw["title_suggestion"] = keyword.title() + suffix
             elif kw["template"] == "howto_apply":
-                clean = re.sub(r"^AI\s+", "", keyword, flags=re.IGNORECASE)
-                kw["title_suggestion"] = f"How to Use AI for {clean.title()} — A Beginner's Guide"
+                pattern = random.choice(self._HOWTO_PATTERNS)
+                kw["title_suggestion"] = pattern.format(kw=clean, year=year)
             elif kw["template"] == "best_tools":
-                clean = re.sub(r"^AI\s+", "", keyword, flags=re.IGNORECASE)
-                kw["title_suggestion"] = f"Best Free AI Tools for {clean.title()} in {datetime.now().year}"
+                pattern = random.choice(self._BEST_TOOLS_PATTERNS)
+                kw["title_suggestion"] = pattern.format(kw=clean, year=year)
             else:
-                clean = re.sub(r"^AI\s+", "", keyword, flags=re.IGNORECASE)
-                kw["title_suggestion"] = f"5 Easy Ways AI Can Help You With {clean.title()}"
+                pattern = random.choice(self._DAILY_TIPS_PATTERNS)
+                kw["title_suggestion"] = pattern.format(kw=clean, year=year)
         return keywords
 
     def _load_cached_keywords(self) -> list[dict]:
