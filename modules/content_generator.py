@@ -12,6 +12,7 @@ class ContentGenerator:
         self.prompts_dir = prompts_dir
         self.output_dir = output_dir
         self.claude_config = config["claude"]
+        self.claude_path = self.claude_config.get("path", "claude")
         self.min_word_count = config["content"]["min_word_count"]
 
     def assemble_prompt(self, keyword_data: dict) -> str:
@@ -84,7 +85,7 @@ class ContentGenerator:
         timeout = self.claude_config["timeout_seconds"]
         logger.debug(f"Prompt length: {len(prompt)} chars")
         result = subprocess.run(
-            ["claude", "-p", "-", "--output-format", "text"],
+            [self.claude_path, "-p", "-", "--output-format", "text"],
             input=prompt,
             capture_output=True,
             text=True,

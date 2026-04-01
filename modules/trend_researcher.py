@@ -50,7 +50,9 @@ class TrendResearcher:
         self.posted_keywords_path = posted_keywords_path
         self.trends_config = config["trends"]
         self.categories = config["content"]["categories"]
-        self.claude_timeout = config.get("claude", {}).get("timeout_seconds", 300)
+        claude_config = config.get("claude", {})
+        self.claude_path = claude_config.get("path", "claude")
+        self.claude_timeout = claude_config.get("timeout_seconds", 300)
 
     def _get_posted_keywords(self) -> list[str]:
         if not os.path.exists(self.posted_keywords_path):
@@ -73,7 +75,7 @@ class TrendResearcher:
     def _call_claude(self, prompt: str) -> str:
         result = subprocess.run(
             [
-                "claude", "-p", "-",
+                self.claude_path, "-p", "-",
                 "--output-format", "text",
                 "--allowedTools", "WebSearch,WebFetch",
             ],
