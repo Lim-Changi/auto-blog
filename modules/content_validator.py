@@ -97,3 +97,75 @@ class ContentValidator:
                     break
 
         return issues
+
+    def _call_claude(self, prompt: str) -> str:
+        result = subprocess.run(
+            [self.claude_path, "-p", "-", "--output-format", "text"],
+            input=prompt,
+            capture_output=True,
+            text=True,
+            timeout=self.claude_timeout,
+        )
+        if result.returncode != 0:
+            raise RuntimeError(f"Claude CLI failed: {result.stderr}")
+        return result.stdout.strip()
+
+    def _build_prompt(self, draft: str, issues: list[str]) -> str:
+        prompt_path = os.path.join(self.prompts_dir, "content_validator.md")
+        with open(prompt_path) as f:
+            template = f.read()
+
+        issues_str = "\n".join(f"- {issue}" for issue in issues)
+        prompt = template.replace("{{draft}}", draft)
+        prompt = prompt.replace("{{issues}}", issues_str)
+        return prompt
+
+    def validate_and_fix(self, draft_path: str) -> str | None:
+        if not self.enabled:
+            logger.info("Validator disabled, skipping.")
+            return draft_path
+
+        with open(draft_path) as f:
+            original_draft = f.read()
+
+        draft = original_draft
+
+        for attempt in range(self.max_fix_attempts):
+            issues = self._check_ai_patterns(draft)
+
+            if not issues:
+                if draft != original_draft:
+                    with open(draft_path, "w") as f:
+                        f.write(draft)
+                    logger.info("Content fixed and saved.")
+                else:
+                    logger.info("Content passed AI pattern check.")
+                return draft_path
+
+            logger.warning(
+                f"Validation attempt {attempt + 1}/{self.max_fix_attempts}: "
+                f"{len(issues)} issues found."
+            )
+            for issue in issues:
+                logger.warning(f"  - {issue}")
+
+            try:
+                prompt = self._build_prompt(draft, issues)
+                draft = self._call_claude(prompt)
+            except Exception as e:
+                logger.error(f"Claude CLI error during validation: {e}")
+                return None
+
+        # Final check after last fix
+        issues = self._check_ai_patterns(draft)
+        if not issues:
+            with open(draft_path, "w") as f:
+                f.write(draft)
+            logger.info("Content fixed and saved.")
+            return draft_path
+
+        logger.error(
+            f"Content still has {len(issues)} issues after "
+            f"{self.max_fix_attempts} fix attempts."
+        )
+        return None

@@ -1,4 +1,5 @@
 import pytest
+from unittest.mock import patch
 from modules.content_validator import ContentValidator
 
 
@@ -73,3 +74,82 @@ class TestCheckAiPatterns:
         )
         issues = validator._check_ai_patterns(text)
         assert issues == []
+
+
+class TestValidateAndFix:
+    def test_clean_draft_passes_without_claude_call(self, validator, tmp_path):
+        draft = (
+            "META: A guide to meal planning with AI.\n\n"
+            "# How to Use AI for Meal Planning\n\n"
+            "I tried using ChatGPT for meal planning last week.\n\n"
+            "Honestly, it was a game changer for me personally. "
+            "The suggestions were spot on and my family loved them.\n\n"
+            "My family loved the variety. Even my picky kid ate everything. "
+            "We saved about $50 on groceries that week.\n\n"
+            "Here's exactly what I did step by step to get started.\n\n"
+            "First, I opened up ChatGPT and typed in a simple prompt."
+        )
+        draft_path = tmp_path / "draft.md"
+        draft_path.write_text(draft)
+
+        with patch.object(validator, "_call_claude") as mock_claude:
+            result = validator.validate_and_fix(str(draft_path))
+            mock_claude.assert_not_called()
+            assert result == str(draft_path)
+
+    def test_calls_claude_when_issues_found(self, validator, tmp_path):
+        draft = (
+            "META: A guide.\n\n"
+            "# Title\n\n"
+            "In today's rapidly evolving world, AI is here.\n\n"
+            "Furthermore, it's worth noting the changes.\n\n"
+            "Let's dive in to the details of this topic.\n\n"
+            "We will explore everything you need to know.\n\n"
+            "This is a fairly long paragraph to make the word count work."
+        )
+        draft_path = tmp_path / "draft.md"
+        draft_path.write_text(draft)
+
+        fixed_content = (
+            "META: A guide.\n\n"
+            "# Title\n\n"
+            "I started using AI tools about a month ago.\n\n"
+            "What surprised me most was how simple it was.\n\n"
+            "Here's what changed in my daily routine.\n\n"
+            "The biggest difference? I actually had free time.\n\n"
+            "My mornings went from chaotic to pretty calm."
+        )
+
+        with patch.object(validator, "_call_claude", return_value=fixed_content):
+            result = validator.validate_and_fix(str(draft_path))
+            assert result == str(draft_path)
+            assert draft_path.read_text() == fixed_content
+
+    def test_returns_none_after_max_attempts(self, validator, tmp_path):
+        bad_draft = (
+            "META: A guide.\n\n"
+            "# Title\n\n"
+            "In today's rapidly evolving world, AI is here.\n\n"
+            "Furthermore, let's dive in.\n\n"
+            "It's worth noting all the changes happening.\n\n"
+            "The possibilities are endless for everyone."
+        )
+        draft_path = tmp_path / "draft.md"
+        draft_path.write_text(bad_draft)
+
+        # Claude keeps returning content with banned phrases
+        with patch.object(validator, "_call_claude", return_value=bad_draft):
+            result = validator.validate_and_fix(str(draft_path))
+            assert result is None
+
+    def test_disabled_validator_passes_through(self, tmp_path):
+        config = {
+            "claude": {"path": "claude", "timeout_seconds": 120},
+            "validator": {"max_fix_attempts": 2, "enabled": False},
+        }
+        validator = ContentValidator(config=config, prompts_dir="prompts")
+        draft_path = tmp_path / "draft.md"
+        draft_path.write_text("In today's world, AI is great.")
+
+        result = validator.validate_and_fix(str(draft_path))
+        assert result == str(draft_path)
