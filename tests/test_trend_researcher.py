@@ -117,17 +117,26 @@ class TestEnrichKeywords:
     def test_adds_title_for_howto(self, researcher):
         keywords = [{"keyword": "AI meal planning", "template": "howto_apply"}]
         result = researcher._enrich_keywords(keywords)
-        assert "How to Use AI" in result[0]["title_suggestion"]
+        title = result[0]["title_suggestion"]
+        assert "Meal Planning" in title
 
     def test_adds_title_for_tools(self, researcher):
         keywords = [{"keyword": "AI travel apps", "template": "best_tools"}]
         result = researcher._enrich_keywords(keywords)
-        assert "Best Free AI Tools" in result[0]["title_suggestion"]
+        title = result[0]["title_suggestion"]
+        assert "Travel Apps" in title
 
     def test_adds_title_for_tips(self, researcher):
         keywords = [{"keyword": "AI cooking", "template": "daily_ai_tips"}]
         result = researcher._enrich_keywords(keywords)
-        assert "5 Easy Ways" in result[0]["title_suggestion"]
+        title = result[0]["title_suggestion"]
+        assert "Cooking" in title
+
+    def test_title_variety(self, researcher):
+        """Verify that repeated calls can produce different titles."""
+        keywords_fn = lambda: [{"keyword": "AI cooking", "template": "daily_ai_tips"}]
+        titles = {researcher._enrich_keywords(keywords_fn())[0]["title_suggestion"] for _ in range(20)}
+        assert len(titles) > 1, "Expected varied titles across runs"
 
 
 class TestRun:
